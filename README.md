@@ -3,13 +3,13 @@
 <p>Our project is done as a work project for the engineering school of Télécom Saint-Etienne.</p>
 
 <p> Code Arduino <p>
-#include <Arduino.h>
+<p>#include <Arduino.h>
 
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(9600);
-  delay(10000);
-}
+<p>void setup() {
+<p>  // put your setup code here, to run once:
+<p>  Serial.begin(9600);
+<p>  delay(10000);
+<p>}
 
 void loop() {
   // put your main code here, to run repeatedly:
