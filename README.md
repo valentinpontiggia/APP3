@@ -11,23 +11,23 @@
 <p>  delay(10000);
 <p>}
 
-void loop() {
-  // put your main code here, to run repeatedly:
-  const float T0=25+273.15; //Température de référence soit 25°C
-  // Ici en Kelvin
-  const float RT0=10000.0;//Résistance de la thermitance à 25°C
-  const float R0=11960.0; // Résistance
-  const float Beta=3977.0; //Constante béta
-  uint16_t Mesure;
-  float T;
+<p>void loop() {
+<p>  // put your main code here, to run repeatedly:
+<p>  const float T0=25+273.15; //Température de référence soit 25°C
+<p>  // Ici en Kelvin
+<p>  const float RT0=10000.0;//Résistance de la thermitance à 25°C
+<p>  const float R0=11960.0; // Résistance
+<p>  const float Beta=3977.0; //Constante béta
+<p>  uint16_t Mesure;
+<p>  float T;
 
-  Mesure=analogRead(A0);
+<p>  Mesure=analogRead(A0);
 
-  T= 1/((1/T0)+((1/Beta)*log((R0/RT0)*((1024.0/(Mesure-13.0))-1)))); //Température en Kelvin
-  T=T-273.15; //Conversion en °C
+<p>  T= 1/((1/T0)+((1/Beta)*log((R0/RT0)*((1024.0/(Mesure-13.0))-1)))); //Température en Kelvin
+<p>  T=T-273.15; //Conversion en °C
 
-  Serial.println(Mesure-13.0);
-  Serial.print("T = ");
-  Serial.println(T);
-}
+<p>  Serial.println(Mesure-13.0);
+<p> Serial.print("T = ");
+<p>  Serial.println(T);
+<p>}
  
