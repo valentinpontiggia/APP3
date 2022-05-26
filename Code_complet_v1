@@ -1,0 +1,258 @@
+///// Projet_APP3 /////
+// Inclut des bibliothèques nécessaires
+// Bibliothèques pour le Bridge
+#include <Bridge.h> 
+#include <BridgeServer.h>
+#include <BridgeClient.h>
+// bibliothèque pour l'affichage Web
+#include <YunServer.h>
+#include <YunClient.h>
+
+YunServer server;
+
+void setup() {
+  Serial.begin(9600);
+  delay(10000);
+  pinMode(13,OUTPUT);
+  digitalWrite(13, LOW);
+  // Début du Bridge
+  Bridge.begin();
+  digitalWrite(13, HIGH);
+  server.listenOnLocalhost();
+  server.begin();
+}
+
+void loop() {
+  YunClient client = server.accept(); // Serveur Yun pour la page Web
+  const float T0=ConversionDegreKelvin(25); //Température de référence soit 25°C, convertie en Kelvin
+  const float RT0=10000.0;//Résistance de la thermitance à 25°C
+  const float R0=11960.0; // Résistance utilisé dans le montage
+  const float Beta=3977.0; //Constante béta utilisée pour le calcul de la température
+  uint16_t Mesure; // Variabkle pour lire la donnée sur le port A0 de l'Arduino Yun
+  float TemperatureEnK; // Variable pour stocker la température en Kelvin
+  float TemperatureEnDC; // Variable pour stocker la température en Degré Celsius
+  float TemperatureEnF; // Variable pour stocker la température en Fahrenheit
+
+  Mesure=analogRead(A0); // On lit la donnée sur le port A0, que l'on stocke dans la variable Mesure
+  // Calcul de la température
+  TemperatureEnK= CalculTemperatureBeta(R0,Beta,RT0,Mesure,T0); //Température en Kelvin calculéé à l'aide de la fonction CalculTemperatureBeta
+  
+  // Conversion de Kelvin en différentes unités
+  TemperatureEnDC=ConversionKelvinDegre(TemperatureEnK); // Conversion en °C
+  TemperatureEnF=ConversionDegreFahrenheit(TemperatureEnDC); // Conversion en Fahrenheit
+  
+  // Fonctions d'affichage sur le terminal
+  affichageTerminalTemperatureEnKelvin(TemperatureEnK); // Affichage de la température en Kelvin
+  affichageTerminalTemperatureEnDegre(TemperatureEnDC); // Affichage de la température en °C
+  affichageTerminalTemperatureEnFahrenheit(TemperatureEnF); // Affichage de la température en Fahrenheit
+
+  // Fonctions d'affichage sur le client Yun
+  affichageDonneesClient(client,TemperatureEnK,TemperatureEnK,TemperatureEnF);
+  
+  delay(1000);
+}
+
+// Méthodes pour la conversion d'un unité de Température en une autre
+float ConversionDegreKelvin(float TemperatureEnDegre){ // Ici le paramètre d'entrée est une températuren en °C
+  return TemperatureEnDegre + 273.15;
+}
+
+float ConversionKelvinDegre(float TemperatureEnKelvin){ // Ici le paramètre d'entrée est une température en Kelvin
+  return TemperatureEnKelvin - 273.15;
+}
+
+float ConversionDegreFahrenheit(float TemperatureEnDegre){ // Ici le paramètre d'entrée est une tempérautre en Kelvin
+  return (1.8*TemperatureEnDegre)+32;
+}
+
+// Méthode pour le calcul de la résistance de la thermistance
+float CalculRt(uint16_t Mesure,const float R0){
+  return R0*((1024/Mesure)-1);
+}
+
+// Méthode pour le calcul de la Température à l'aide du modèle Béta
+float CalculTemperatureBeta(const float resistanceA0, const float Beta, const float resistanceThermistanceA25, uint16_t Mesure, const float T0){ 
+  // Il existe d'autres méthodes pour calculer la température
+  // On utilise le modèle Beta pour calculer la température
+  float T;
+  T = 1/((1/T0)+((1/Beta)*log((resistanceA0/resistanceThermistanceA25)*((1024.0/(Mesure))-1))));
+  return T;
+}
+
+// Méthode pour le calcul de la Température à l'aide du modèle de Streinhart-Hart
+float CalculTemperatureStreinhartHart(const float R0, uint16_t Mesure, const float T0, const float A,const float B,const float Bbis,const float C){
+  float Rt=  CalculRt(Mesure,R0);
+  float T1= A+B*log(Rt)+Bbis*pow(2,log(Rt))+C*pow(3,log(Rt));
+  return 1/T1;
+}
+
+// Méthodes pour afficher la température sur le terminal Arduino
+
+void affichageTerminalTemperatureEnDegre(float TemperatureDegre){
+  Serial.print("Température (en °C) : ");
+  Serial.print(TemperatureDegre);
+}
+
+void affichageTerminalTemperatureEnKelvin(float TemperatureEnKelvin){
+  Serial.print("Température (en °C) : ");
+  Serial.print(TemperatureEnKelvin);
+}
+
+void affichageTerminalTemperatureEnFahrenheit(float TemperatureEnF){
+  Serial.print("Temperature (en F) : ");
+  Serial.println(TemperatureEnF);
+}
+
+// Méthode pour afficher les données sur le client Arduino
+void affichageDonneesClient(YunClient client,float TemperatureEnK, float TemperatureEnDC, float TemperatureEnF){
+  if (client) {
+    while (client.connected()){ // A enlever si ça ne fonctionne pas
+      if (client.available()){ // A enlever si ça ne fonctionne pas
+        // Affichage de la température en Kelvin sur le client
+        client.print("<br> Température en Kelvin : ");
+        client.print(TemperatureEnK," K\n");
+        // Affichage de la température en Degré Celsius sur le client
+        client.print("<br> Température en Degré Celsius : ");
+        client.print(TemperatureEnDC," °C\n");
+        // Affichage de la température en Fahrenheit sur le client
+        client.print("<br> Température en Fahrenheit : ");
+        client.print(TemperatureEnF," F\n");
+      }
+    }
+    client.stop();
+    delay(1000);
+  }
+}
+
+///// Sketch //////
+#include <Bridge.h>
+#include <BridgeClient.h>
+#include <BridgeSSLClient.h>
+#include <BridgeServer.h>
+#include <BridgeUdp.h>
+#include <Console.h>
+#include <FileIO.h>
+#include <HttpClient.h>
+#include <Mailbox.h>
+#include <Process.h>
+#include <YunClient.h>
+#include <YunServer.h>
+
+YunServer server;
+
+void setup() {
+
+  Serial.begin(9600);
+
+  pinMode(13,OUTPUT);
+
+  digitalWrite(13, LOW);
+
+  Bridge.begin();
+
+  digitalWrite(13, HIGH);
+
+  server.listenOnLocalhost();
+
+  server.begin();
+}
+
+
+void loop() {
+
+  YunClient client = server.accept();
+
+  if (client) {
+
+    process(client);
+
+    client.stop();
+
+  }
+
+  delay(50);
+}
+
+
+void process(YunClient client) {
+
+  String command = client.readStringUntil('/');
+
+  if (command == "digital") {
+
+    digitalCommand(client);
+
+  }
+}
+
+
+void digitalCommand(YunClient client) {
+
+  int pin, value;
+    pin = client.parseInt();
+
+  if (client.read() == '/') {
+
+    value = client.parseInt();
+
+    digitalWrite(pin, value);
+
+  }
+
+  else {
+
+    value = digitalRead(pin);
+
+  }
+}
+
+void analogCommand(YunClient client) {
+
+  int pin, value;
+
+  pin = client.parseInt();
+
+  if (client.read() == '/') {
+
+    value = client.parseInt();
+
+    analogWrite(pin, value);
+
+    // Send feedback to client
+
+    client.print(F("Pin D"));
+
+    client.print(pin);
+
+    client.print(F(" set to analog "));
+
+    client.println(value);
+
+    String key = "D";
+
+    key += pin;
+
+    Bridge.put(key, String(value));
+
+  }
+
+  else {
+
+    value = analogRead(pin);
+
+    client.print(F("Pin A"));
+
+    client.print(pin);
+
+    client.print(F(" reads analog "));
+
+    client.println(value);
+
+    String key = "A";
+
+    key += pin;
+
+    Bridge.put(key, String(value));
+
+  }
+}
