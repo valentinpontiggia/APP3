@@ -1,0 +1,152 @@
+// Inclut des bibliothèques nécessaires
+// Bibliothèques pour le Bridge
+#include <Bridge.h> 
+#include <BridgeServer.h>
+#include <BridgeClient.h>
+// bibliothèque pour l'affichage Web
+#include <YunServer.h>
+#include <YunClient.h>
+
+BridgeServer server;
+
+void setup() {
+  Serial.begin(9600);
+  // Début du Bridge
+  Bridge.begin();
+  server.listenOnLocalhost();
+  server.begin();
+  delay(2500);  
+}
+
+void loop() {
+  // Constantes  
+  const float T0=ConversionDegreKelvin(25); //Température de référence soit 25°C, convertie en Kelvin
+  const float RT0=10000.0;//Résistance de la thermitance à 25°C
+  const float R0=12030.0; // Résistance utilisé dans le montage
+  const float Beta=3977.0; //Constante béta utilisée pour le calcul de la température
+  const float A = 1.2476*pow(-3,10) ;
+  const float B = 2.3571*pow(-4,10);
+  const float Bbis = -2.5382*pow(-6,10) ;
+  const float C = 1.934*pow(-7,10) ;
+  uint16_t Mesure; // Variabkle pour lire la donnée sur le port A0 de l'Arduino Yun
+  uint16_t MesureTotal;
+  float TemperatureEnK=0; // Variable pour stocker la température en Kelvin
+  float TemperatureEnDC; // Variable pour stocker la température en Degré Celsius
+  float TemperatureEnF; // Variable pour stocker la température en Fahrenheit
+  float TenK;
+  for (int k=0; k<10; k++){
+      Mesure=analogRead(A0);
+      TenK= CalculTemperatureBeta(R0,Beta,RT0,Mesure,T0); //Température en Kelvin calculéé à l'aide de la fonction CalculTemperatureBeta
+      TemperatureEnK+=TenK;
+  }
+  TemperatureEnK=TemperatureEnK/10;
+  // Mesure=analogRead(A0); // On lit la donnée sur le port A0, que l'on stocke dans la variable Mesure
+  // Calcul de la température
+  // TemperatureEnK=CalculTemperatureStreinhartHart(R0,Mesure, T0, A, B, Bbis, C);
+  // Conversion de Kelvin en différentes unités
+  TemperatureEnDC=ConversionKelvinDegre(TemperatureEnK); // Conversion en °C
+  TemperatureEnF=ConversionDegreFahrenheit(TemperatureEnDC); // Conversion en Fahrenheit
+
+  BridgeClient client = server.accept(); // Serveur Yun pour la page Web
+  if (client){
+    read(client,TemperatureEnK,TemperatureEnDC,TemperatureEnF);
+    client.stop();
+  }
+  /*
+  // Fonctions d'affichage sur le terminal
+  affichageTerminalTemperatureEnKelvin(TemperatureEnK); // Affichage de la température en Kelvin
+  affichageTerminalTemperatureEnDegre(TemperatureEnDC); // Affichage de la température en °C
+  affichageTerminalTemperatureEnFahrenheit(TemperatureEnF); // Affichage de la température en Fahrenheit
+  */  
+  // Fonctions d'affichage sur le client Yun
+  // affichageDonneesClient(client,TemperatureEnK,TemperatureEnDC,TemperatureEnF);
+
+  delay(2500);
+}
+
+void read(BridgeClient client, float TemperatureEnK,float TemperatureEnDC,float TemperatureEnF){
+  String command = client.readStringUntil('/');
+  if (command=="digital"){
+    readDigital(client, TemperatureEnK,TemperatureEnDC,TemperatureEnF);
+  }
+  if (command=="analog"){
+    client.print(F("Erreur"));
+  }
+  if (command=="mode"){
+    client.print(F("Erreur"));
+  }    
+}
+
+void readDigital(BridgeClient client, float TemperatureEnK,float TemperatureEnDC,float TemperatureEnF){
+  if (client.read()!="/"){ // A changer si ça ne fontionne pas
+    client.print(F("Temperature en K : "));
+    client.print(TemperatureEnK);
+    client.print("\n");
+    Bridge.put("A0",String(TemperatureEnK));
+    client.print(F("Temperature en °C : "));
+    client.print(TemperatureEnDC);
+    client.print("\n");
+    Bridge.put("A0",String(TemperatureEnDC));
+    client.print(F("Temperature en F : "));
+    client.print(TemperatureEnF);
+    Bridge.put("A0",String(TemperatureEnF));
+  }
+  else {
+    client.print(F("Erreur"));
+  }  
+}
+
+// Méthodes pour la conversion d'un unité de Température en une autre
+float ConversionDegreKelvin(float TemperatureEnDegre){ // Ici le paramètre d'entrée est une températuren en °C
+  return TemperatureEnDegre + 273.15;
+}
+
+float ConversionKelvinDegre(float TemperatureEnKelvin){ // Ici le paramètre d'entrée est une température en Kelvin
+  return TemperatureEnKelvin - 273.15;
+}
+
+float ConversionDegreFahrenheit(float TemperatureEnDegre){ // Ici le paramètre d'entrée est une tempérautre en Kelvin
+  return (1.8*TemperatureEnDegre)+32;
+}
+
+// Méthode pour le calcul de la résistance de la thermistance
+float CalculRt(uint16_t Mesure,const float R0){
+  return R0*((1024/Mesure)-1);
+}
+
+// Méthode pour le calcul de la Température à l'aide du modèle Béta
+float CalculTemperatureBeta(const float resistanceA0, const float Beta, const float resistanceThermistanceA25, uint16_t Mesure, const float T0){ 
+  // Il existe d'autres méthodes pour calculer la température
+  // On utilise le modèle Beta pour calculer la température
+  float T;
+  T = 1/((1/T0)+((1/Beta)*log((resistanceA0/resistanceThermistanceA25)*((1024.0/(Mesure))-1))));
+  return T; // Ajout d'une différence pour avoir la bonne température (chercher l'erreur dans le code)
+}
+
+// Méthode pour le calcul de la Température à l'aide du modèle de Streinhart-Hart
+float CalculTemperatureStreinhartHart(const float R0, uint16_t Mesure, const float T0, const float A,const float B,const float Bbis,const float C){
+  float Rt=  CalculRt(Mesure,R0);
+  float T1= A+B*log(Rt)+Bbis*pow(2,log(Rt))+C*pow(3,log(Rt));
+  return 1/T1;
+}
+
+// Méthode pour afficher les données sur le client Arduino
+void affichageDonneesClient(BridgeClient client,float TemperatureEnK, float TemperatureEnDC, float TemperatureEnF){
+  if (client) {
+    while (client.connected()){ // A enlever si ça ne fonctionne pas
+      if (client.available()){ // A enlever si ça ne fonctionne pas
+        // Affichage de la température en Kelvin sur le client
+        client.print("<br> Température en Kelvin : ");
+        client.print(TemperatureEnK," K\n");
+        // Affichage de la température en Degré Celsius sur le client
+        client.print("<br> Température en Degré Celsius : ");
+        client.print(TemperatureEnDC," °C\n");
+        // Affichage de la température en Fahrenheit sur le client
+        client.print("<br> Température en Fahrenheit : ");
+        client.print(TemperatureEnF," F\n");
+      }
+    }
+    client.stop();
+    delay(1000);
+  }
+}
